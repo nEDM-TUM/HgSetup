@@ -29,8 +29,8 @@ class wlmlocker():
     def __init__(self):
         pass
     def lock(self):
-        lockerthread=pidthread()
-        lockerthread.start()
+        self.lockerthread=pidthread()
+        self.lockerthread.start()
     def changesetpoint(self,setpoint):
         global update_setpoint
         global globstep
