@@ -10,6 +10,7 @@ import WLM
 import time
 import pid 
 import threading
+from time import strftime
 killme=False
 locked=False
 update_setpoint=False
@@ -67,16 +68,20 @@ class locker():
         print "lock started"
         #get piezo offset at beginning
         self.voltagestart=self.digi.getoffset()
-       # print self.voltagestart
-       # print "pre pid"
+        print self.voltagestart
+        print "pre pid"
         #set Ki to initial offset
-        pi=pid.PID(P,I,D,Derivator,Integrator,Integrator_max,Integrator_min)
+        pi=pid.PID(P,I,D,Derivator,Integrator,Integrator_max-0.1*Integrator_max,Integrator_min+0.1*Integrator_min)
         pi.setPoint(wl_setpoint)
         pi.setIntegrator(self.voltagestart)
         print killme
+        counter=0
+        #the actual pid controller loop:
+        #counter is used to not break until several measurementsin a row  exceed max values
         while not killme:
-         #   print "in the loop"
+#            print "in the loop"
             try:
+                counter=(counter-2 if counter > 0 else 0) 
                 if update_setpoint:
                     self.voltagestart=self.digi.getoffset()
                     print self.voltagestart
@@ -95,11 +100,16 @@ class locker():
                 time.sleep(1)
                 #update pid
                 corr=pi.update(wl)
-              #  print corr
+                print corr
                 #check for limits
-                if corr>40. or corr< -40.:
-                    print "please readjust wavelength mechanically"
-                    break
+                if corr>Integrator_max or corr< Integrator_min:
+                    if counter<3:
+                        counter+2
+                        corr=(Integrator_max if corr>Integrator_max else Integrator_min)
+                    else:
+                        print "reached a Voltage limit at: "+strftime("%Y-%m-%d %H:%M:%S")
+                        print "please readjust wavelength mechanically"
+                        break
                 #set piezo offset voltage
               #  raw_input("now or never")
                 self.digi.setoffset(corr)
