@@ -59,15 +59,18 @@ class locker():
         self.digilock_ip='localhost'
         self.wlm=WLM.WavelengthMeter()
         self.digi=digilock.digilock(self.digilock_ip,60001)
-    def lock(self,wl_setpoint=1014.9215,P=0.5,I=0.1,D=0,Derivator=0,Integrator=0,Integrator_max=40,Integrator_min=-40):
+    def lock(self,wl_setpoint=1014.9215,P=0.5,I=0.1,D=0,Derivator=0,Integrator=0,Integrator_max=40,Integrator_min=-40,Max_Stepsize=0.005):
         global update_setpoint
         global update_I
         global update_P
         global locked
+        global killme
         locked=True
         print "lock started"
         #get piezo offset at beginning
         self.voltagestart=self.digi.getoffset()
+        #define starting correction value to enable limitation of the stepsize
+        corr_old=self.voltagestart
         print self.voltagestart
         print "pre pid"
         #set Ki to initial offset
@@ -81,7 +84,7 @@ class locker():
         while not killme:
 #            print "in the loop"
             try:
-                counter=(counter-2 if counter > 0 else 0) 
+                counter=(counter-1 if counter > 0 else 0) 
                 if update_setpoint:
                     self.voltagestart=self.digi.getoffset()
                     print self.voltagestart
@@ -99,8 +102,9 @@ class locker():
                 wl=self.wlm.getWL()
                 time.sleep(1)
                 #update pid
+                print wl
                 corr=pi.update(wl)
-                print corr
+                #print corr
                 #check for limits
                 if corr>Integrator_max or corr< Integrator_min:
                     if counter<3:
@@ -109,10 +113,17 @@ class locker():
                     else:
                         print "reached a Voltage limit at: "+strftime("%Y-%m-%d %H:%M:%S")
                         print "please readjust wavelength mechanically"
+                        killme=True
                         break
                 #set piezo offset voltage
               #  raw_input("now or never")
                 self.digi.setoffset(corr)
+                #limit the stepsize to avoid laser jumps
+                if corr-corr_old>Max_Stepsize:
+                    corr=corr+Max_Stepsize
+                elif corr_old-corr>Max_Stepsize:
+                    corr=corr-Max_Stepsize
+                corr_old=corr
             except KeyboardInterrupt:
                 locked=False
                 break
